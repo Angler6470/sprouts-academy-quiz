@@ -230,13 +230,26 @@ Return JSON in this exact shape:
       )
     }
 
-    return new Response(JSON.stringify(parsed), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store'
-      }
-    })
+    licenseData.credits -= 1
+
+await context.env.LICENSES.put(
+  body.licenseKey,
+  JSON.stringify(licenseData)
+)
+
+return new Response(
+  JSON.stringify({
+    quiz: parsed,
+    creditsRemaining: licenseData.credits
+  }),
+  {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store'
+    }
+  }
+)
   } catch (error) {
     return new Response(`Function error: ${error.message}`, { status: 500 })
   }
