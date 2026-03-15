@@ -1,0 +1,1 @@
+// PWA temporarily disabled
