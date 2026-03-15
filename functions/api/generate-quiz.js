@@ -101,7 +101,7 @@ Return JSON in this exact shape:
         Authorization: `Bearer ${context.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'gpt-5.4',
+        model: 'gpt-4.1-mini',
         input: prompt,
         text: {
           format: {
@@ -163,13 +163,53 @@ Return JSON in this exact shape:
     }
 
     const data = await response.json()
-    const outputText = data.output_text
 
-    if (!outputText) {
-      return new Response('No quiz output returned', { status: 500 })
+    // Try the helper field first
+    let outputText = data.output_text
+
+    // Fallback: extract from output/content blocks
+    if (!outputText && Array.isArray(data.output)) {
+      for (const item of data.output) {
+        if (!Array.isArray(item.content)) continue
+
+        for (const contentItem of item.content) {
+          if (typeof contentItem.text === 'string' && contentItem.text.trim()) {
+            outputText = contentItem.text
+            break
+          }
+
+          if (
+            typeof contentItem.json === 'object' &&
+            contentItem.json !== null
+          ) {
+            outputText = JSON.stringify(contentItem.json)
+            break
+          }
+        }
+
+        if (outputText) break
+      }
     }
 
-    return new Response(outputText, {
+    if (!outputText) {
+      return new Response(
+        `No quiz output returned. Raw response: ${JSON.stringify(data)}`,
+        { status: 500 }
+      )
+    }
+
+    // Validate JSON before returning
+    let parsed
+    try {
+      parsed = JSON.parse(outputText)
+    } catch {
+      return new Response(
+        `Model returned non-JSON output: ${outputText}`,
+        { status: 500 }
+      )
+    }
+
+    return new Response(JSON.stringify(parsed), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
