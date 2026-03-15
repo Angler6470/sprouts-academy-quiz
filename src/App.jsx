@@ -6,6 +6,9 @@ import { generateQuiz } from './lib/api.js'
 import { saveQuiz, getSavedQuizzes } from './lib/storage.js'
 import { scoreQuiz } from './lib/scoring.js'
 
+const ETSY_CREDITS_URL =
+  'https://www.etsy.com/listing/4472218117/interactive-quiz-builder-for-kids'
+
 function getSubjectTheme(subject) {
   switch (subject) {
     case 'Reading':
@@ -55,7 +58,11 @@ export default function App() {
   }, [printMode])
 
   useEffect(() => {
-    localStorage.setItem('sproutsLicenseKey', licenseKey)
+    if (licenseKey.trim()) {
+      localStorage.setItem('sproutsLicenseKey', licenseKey)
+    } else {
+      localStorage.removeItem('sproutsLicenseKey')
+    }
   }, [licenseKey])
 
   useEffect(() => {
@@ -67,6 +74,13 @@ export default function App() {
   }, [creditsRemaining])
 
   async function handleGenerate(formData) {
+    const trimmedLicenseKey = licenseKey.trim()
+
+    if (!trimmedLicenseKey) {
+      alert('Please enter and activate your license key first.')
+      return
+    }
+
     setLoading(true)
     setResults(null)
     setAnswers({})
@@ -75,7 +89,7 @@ export default function App() {
     try {
       const data = await generateQuiz({
         ...formData,
-        licenseKey: licenseKey.trim()
+        licenseKey: trimmedLicenseKey
       })
 
       const quizData = data?.quiz ?? data
@@ -94,8 +108,10 @@ export default function App() {
 
       if (typeof returnedCredits === 'number') {
         setCreditsRemaining(returnedCredits)
-      } else if (licenseKey.trim() && typeof creditsRemaining === 'number' && creditsRemaining > 0) {
-        setCreditsRemaining((prev) => (typeof prev === 'number' && prev > 0 ? prev - 1 : prev))
+      } else if (typeof creditsRemaining === 'number' && creditsRemaining > 0) {
+        setCreditsRemaining((prev) =>
+          typeof prev === 'number' && prev > 0 ? prev - 1 : prev
+        )
       }
 
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -205,6 +221,12 @@ export default function App() {
     }
   }, [quiz, answers])
 
+  const creditsAreLow =
+    typeof creditsRemaining === 'number' && creditsRemaining > 0 && creditsRemaining <= 25
+
+  const creditsAreEmpty =
+    typeof creditsRemaining === 'number' && creditsRemaining <= 0
+
   return (
     <div className={`app ${subjectTheme}`}>
       <aside className="license-popup no-print" aria-label="License and credits panel">
@@ -265,8 +287,29 @@ export default function App() {
 
             <p className="license-help">
               One Etsy purchase includes <strong>500 quiz credits</strong>. Each generated quiz uses{' '}
-              <strong>1 credit</strong>. Refill packs add <strong>500 more for $5</strong>.
+              <strong>1 credit</strong>.
             </p>
+
+            <p className="license-help license-help-secondary">
+              Need more? Refill packs add <strong>500 more credits for $5</strong>.
+            </p>
+
+            {(creditsAreLow || creditsAreEmpty) && (
+              <p className={`license-warning ${creditsAreEmpty ? 'license-warning-empty' : ''}`}>
+                {creditsAreEmpty
+                  ? 'You are out of credits.'
+                  : `You are getting low on credits (${creditsRemaining} left).`}
+              </p>
+            )}
+
+            <a
+              href={ETSY_CREDITS_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="buy-credits-link"
+            >
+              Buy More Credits
+            </a>
           </div>
         )}
       </aside>
