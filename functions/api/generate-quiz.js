@@ -2,6 +2,27 @@ export async function onRequestPost(context) {
   try {
     const body = await context.request.json()
 
+    const license = await context.env.LICENSES.get(body.licenseKey)
+
+if (!license) {
+  return new Response(
+    JSON.stringify({ error: "Invalid license key" }),
+    { status: 403 }
+  )
+}
+
+const licenseData = JSON.parse(license)
+
+if (licenseData.credits <= 0) {
+  return new Response(
+    JSON.stringify({
+      error: "No credits remaining",
+      message: "Please purchase more quiz credits."
+    }),
+    { status: 403 }
+  )
+}
+
     const subjects = ['Math', 'Reading', 'Science']
     const gradeBands = ['1-2', '2-3', '3-4', '4-5', '5-6']
     const difficulties = ['easy', 'medium', 'hard', 'expert']
