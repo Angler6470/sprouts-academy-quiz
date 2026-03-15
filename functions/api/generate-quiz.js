@@ -4,24 +4,30 @@ export async function onRequestPost(context) {
 
     const license = await context.env.LICENSES.get(body.licenseKey)
 
-if (!license) {
-  return new Response(
-    JSON.stringify({ error: "Invalid license key" }),
-    { status: 403 }
-  )
-}
+    if (!license) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid license key' }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
 
-const licenseData = JSON.parse(license)
+    const licenseData = JSON.parse(license)
 
-if (licenseData.credits <= 0) {
-  return new Response(
-    JSON.stringify({
-      error: "No credits remaining",
-      message: "Please purchase more quiz credits."
-    }),
-    { status: 403 }
-  )
-}
+    if (licenseData.credits <= 0) {
+      return new Response(
+        JSON.stringify({
+          error: 'No credits remaining',
+          message: 'Please purchase more quiz credits.'
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
 
     const subjects = ['Math', 'Reading', 'Science']
     const gradeBands = ['1-2', '2-3', '3-4', '4-5', '5-6']
@@ -185,10 +191,8 @@ Return JSON in this exact shape:
 
     const data = await response.json()
 
-    // Try the helper field first
     let outputText = data.output_text
 
-    // Fallback: extract from output/content blocks
     if (!outputText && Array.isArray(data.output)) {
       for (const item of data.output) {
         if (!Array.isArray(item.content)) continue
@@ -199,10 +203,7 @@ Return JSON in this exact shape:
             break
           }
 
-          if (
-            typeof contentItem.json === 'object' &&
-            contentItem.json !== null
-          ) {
+          if (typeof contentItem.json === 'object' && contentItem.json !== null) {
             outputText = JSON.stringify(contentItem.json)
             break
           }
@@ -219,7 +220,6 @@ Return JSON in this exact shape:
       )
     }
 
-    // Validate JSON before returning
     let parsed
     try {
       parsed = JSON.parse(outputText)
@@ -232,24 +232,24 @@ Return JSON in this exact shape:
 
     licenseData.credits -= 1
 
-await context.env.LICENSES.put(
-  body.licenseKey,
-  JSON.stringify(licenseData)
-)
+    await context.env.LICENSES.put(
+      body.licenseKey,
+      JSON.stringify(licenseData)
+    )
 
-return new Response(
-  JSON.stringify({
-    quiz: parsed,
-    creditsRemaining: licenseData.credits
-  }),
-  {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-store'
-    }
-  }
-)
+    return new Response(
+      JSON.stringify({
+        quiz: parsed,
+        creditsRemaining: licenseData.credits
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store'
+        }
+      }
+    )
   } catch (error) {
     return new Response(`Function error: ${error.message}`, { status: 500 })
   }
