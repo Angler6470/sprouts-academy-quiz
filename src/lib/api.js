@@ -1,5 +1,5 @@
 export async function generateQuiz(payload) {
-  const response = await fetch('http://localhost:3001/api/generate-quiz', {
+  const response = await fetch('/api/generate-quiz', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
