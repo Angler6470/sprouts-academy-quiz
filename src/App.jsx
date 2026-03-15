@@ -18,6 +18,14 @@ function getSubjectTheme(subject) {
   }
 }
 
+function getStoredCredits() {
+  const raw = localStorage.getItem('sproutsCreditsRemaining')
+  if (raw === null) return null
+
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 export default function App() {
   const [quiz, setQuiz] = useState(null)
   const [answers, setAnswers] = useState({})
@@ -28,6 +36,15 @@ export default function App() {
   const [showBuilder, setShowBuilder] = useState(true)
   const [showSaved, setShowSaved] = useState(false)
 
+  const [licenseKey, setLicenseKey] = useState(
+    localStorage.getItem('sproutsLicenseKey') || ''
+  )
+  const [creditsRemaining, setCreditsRemaining] = useState(getStoredCredits())
+  const [licenseSaved, setLicenseSaved] = useState(
+    Boolean(localStorage.getItem('sproutsLicenseKey'))
+  )
+  const [showLicensePopup, setShowLicensePopup] = useState(true)
+
   const quizTopRef = useRef(null)
 
   useEffect(() => {
@@ -37,6 +54,18 @@ export default function App() {
     }
   }, [printMode])
 
+  useEffect(() => {
+    localStorage.setItem('sproutsLicenseKey', licenseKey)
+  }, [licenseKey])
+
+  useEffect(() => {
+    if (typeof creditsRemaining === 'number') {
+      localStorage.setItem('sproutsCreditsRemaining', String(creditsRemaining))
+    } else {
+      localStorage.removeItem('sproutsCreditsRemaining')
+    }
+  }, [creditsRemaining])
+
   async function handleGenerate(formData) {
     setLoading(true)
     setResults(null)
@@ -44,17 +73,30 @@ export default function App() {
     setPrintMode('quiz')
 
     try {
-      const data = await generateQuiz(formData)
+      const data = await generateQuiz({
+        ...formData,
+        licenseKey: licenseKey.trim()
+      })
+
+      const quizData = data?.quiz ?? data
+      const returnedCredits =
+        typeof data?.creditsRemaining === 'number' ? data.creditsRemaining : null
 
       const quizToSave = {
-        ...data,
+        ...quizData,
         savedAt: new Date().toISOString()
       }
 
-      setQuiz(data)
+      setQuiz(quizData)
       saveQuiz(quizToSave)
       setSaved(getSavedQuizzes())
       setShowBuilder(false)
+
+      if (typeof returnedCredits === 'number') {
+        setCreditsRemaining(returnedCredits)
+      } else if (licenseKey.trim() && typeof creditsRemaining === 'number' && creditsRemaining > 0) {
+        setCreditsRemaining((prev) => (typeof prev === 'number' && prev > 0 ? prev - 1 : prev))
+      }
 
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (error) {
@@ -113,6 +155,30 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  function handleSaveLicense() {
+    const trimmed = licenseKey.trim()
+
+    if (!trimmed) {
+      alert('Please enter a license key.')
+      return
+    }
+
+    setLicenseKey(trimmed)
+    setLicenseSaved(true)
+
+    if (getStoredCredits() === null) {
+      setCreditsRemaining(500)
+    }
+  }
+
+  function handleClearLicense() {
+    setLicenseKey('')
+    setLicenseSaved(false)
+    setCreditsRemaining(null)
+    localStorage.removeItem('sproutsLicenseKey')
+    localStorage.removeItem('sproutsCreditsRemaining')
+  }
+
   const subjectTheme = getSubjectTheme(quiz?.subject)
 
   const stats = useMemo(() => {
@@ -141,6 +207,70 @@ export default function App() {
 
   return (
     <div className={`app ${subjectTheme}`}>
+      <aside className="license-popup no-print" aria-label="License and credits panel">
+        <div className="license-popup-header">
+          <div>
+            <h3>License & Credits</h3>
+            <p className="license-mini-text">For Etsy customers</p>
+          </div>
+
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => setShowLicensePopup((prev) => !prev)}
+            aria-label={showLicensePopup ? 'Collapse license panel' : 'Expand license panel'}
+          >
+            {showLicensePopup ? '−' : '+'}
+          </button>
+        </div>
+
+        {showLicensePopup && (
+          <div className="license-popup-body">
+            <label htmlFor="licenseKeyInput" className="license-label">
+              Enter license key
+            </label>
+
+            <input
+              id="licenseKeyInput"
+              type="text"
+              value={licenseKey}
+              onChange={(e) => {
+                setLicenseKey(e.target.value)
+                setLicenseSaved(false)
+              }}
+              placeholder="SAQB-XXXX-XXXX-XXXX"
+              className="license-input"
+            />
+
+            <div className="license-button-row">
+              <button type="button" className="tiny-btn" onClick={handleSaveLicense}>
+                Activate
+              </button>
+              <button type="button" className="tiny-btn secondary-btn" onClick={handleClearLicense}>
+                Clear
+              </button>
+            </div>
+
+            <div className="license-status-card">
+              <p className="license-status-row">
+                <span>Status</span>
+                <strong>{licenseSaved && licenseKey.trim() ? 'Saved' : 'Not saved'}</strong>
+              </p>
+
+              <p className="license-status-row">
+                <span>Credits remaining</span>
+                <strong>{typeof creditsRemaining === 'number' ? creditsRemaining : '—'}</strong>
+              </p>
+            </div>
+
+            <p className="license-help">
+              One Etsy purchase includes <strong>500 quiz credits</strong>. Each generated quiz uses{' '}
+              <strong>1 credit</strong>. Refill packs add <strong>500 more for $5</strong>.
+            </p>
+          </div>
+        )}
+      </aside>
+
       <header className="hero card">
         <h1>Sprouts Academy Quiz Builder</h1>
         <p>Generate AI-powered quizzes for homeschool learning.</p>
