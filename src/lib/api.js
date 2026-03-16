@@ -7,10 +7,19 @@ export async function generateQuiz(payload) {
     body: JSON.stringify(payload)
   })
 
+  const contentType = response.headers.get('content-type') || ''
+  const isJson = contentType.includes('application/json')
+  const responseBody = isJson ? await response.json().catch(() => null) : await response.text()
+
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || 'Failed to generate quiz')
+    if (typeof responseBody === 'string') {
+      throw new Error(responseBody || 'Failed to generate quiz')
+    }
+
+    throw new Error(
+      responseBody?.message || responseBody?.error || 'Failed to generate quiz'
+    )
   }
 
-  return response.json()
+  return responseBody
 }

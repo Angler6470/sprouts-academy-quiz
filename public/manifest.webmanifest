@@ -1,0 +1,21 @@
+{
+	"name": "Sprouts Academy Quiz Builder",
+	"short_name": "Sprouts Quiz",
+	"description": "Generate printable AI-powered quiz worksheets for homeschool families, tutors, and teachers.",
+	"start_url": "/",
+	"display": "standalone",
+	"background_color": "#eef2f7",
+	"theme_color": "#4f46e5",
+	"icons": [
+		{
+			"src": "/icons/icon-192.png",
+			"sizes": "192x192",
+			"type": "image/png"
+		},
+		{
+			"src": "/icons/icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png"
+		}
+	]
+}

@@ -14,7 +14,10 @@ export default function ResultsCard({ results }) {
           </p>
           <p>Your answer: {item.userAnswer || 'No answer'}</p>
           <p>Correct answer: {item.answer}</p>
-          <p>{item.isCorrect ? '✅ Correct' : '❌ Incorrect'}</p>
+            {Array.isArray(item.acceptedAnswers) && item.acceptedAnswers.length > 1 ? (
+              <p>Accepted answers: {item.acceptedAnswers.join(', ')}</p>
+            ) : null}
+            <p>{item.isCorrect ? 'Correct' : 'Incorrect'}</p>
           {item.explanation ? <p>Explanation: {item.explanation}</p> : null}
           <hr />
         </div>

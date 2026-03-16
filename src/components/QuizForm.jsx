@@ -1,4 +1,9 @@
 import { useState } from 'react'
+import {
+  DIFFICULTIES,
+  GRADE_BANDS,
+  QUESTION_COUNTS
+} from '../../shared/quizConfig.js'
 
 const SUBJECT_TOPICS = {
   Math: [
@@ -38,10 +43,6 @@ const SUBJECT_TOPICS = {
     'Simple Machines'
   ]
 }
-
-const GRADE_BANDS = ['1-2', '2-3', '3-4', '4-5', '5-6']
-const DIFFICULTIES = ['easy', 'medium', 'hard', 'expert']
-const COUNTS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 
 export default function QuizForm({ onGenerate, loading }) {
   const [form, setForm] = useState({
@@ -107,8 +108,6 @@ export default function QuizForm({ onGenerate, loading }) {
 
   return (
     <form onSubmit={handleSubmit} className="card no-print">
-      <h2>Build a Quiz</h2>
-
       <label>Subject</label>
       <select value={form.subject} onChange={(e) => handleSubjectChange(e.target.value)}>
         <option value="Math">Math</option>
@@ -159,7 +158,7 @@ export default function QuizForm({ onGenerate, loading }) {
 
       <label>Question Count</label>
       <select value={form.count} onChange={(e) => updateField('count', Number(e.target.value))}>
-        {COUNTS.map((count) => (
+        {QUESTION_COUNTS.map((count) => (
           <option key={count} value={count}>
             {count}
           </option>

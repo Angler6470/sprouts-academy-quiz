@@ -3,7 +3,12 @@ import QuizForm from './components/QuizForm.jsx'
 import QuestionCard from './components/QuestionCard.jsx'
 import ResultsCard from './components/ResultsCard.jsx'
 import { generateQuiz } from './lib/api.js'
-import { saveQuiz, getSavedQuizzes } from './lib/storage.js'
+import {
+  deleteSavedQuiz,
+  getSavedQuizzes,
+  renameSavedQuiz,
+  saveQuiz
+} from './lib/storage.js'
 import { scoreQuiz } from './lib/scoring.js'
 
 const ETSY_CREDITS_URL =
@@ -29,6 +34,50 @@ function getStoredCredits() {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function buildQuestionDraft(question, index) {
+  return {
+    ...question,
+    id: question.id || `q${index + 1}`,
+    choices: Array.isArray(question.choices) ? question.choices : [],
+    acceptedAnswers:
+      Array.isArray(question.acceptedAnswers) && question.acceptedAnswers.length > 0
+        ? question.acceptedAnswers
+        : [question.answer].filter(Boolean)
+  }
+}
+
+function normalizeQuizForClient(quiz) {
+  if (!quiz) {
+    return null
+  }
+
+  return {
+    ...quiz,
+    title: quiz.title || 'Untitled Quiz',
+    topics: Array.isArray(quiz.topics) ? quiz.topics : [],
+    questions: Array.isArray(quiz.questions)
+      ? quiz.questions.map((question, index) => buildQuestionDraft(question, index))
+      : []
+  }
+}
+
+function formatSavedDate(value) {
+  if (!value) return 'Unknown date'
+
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Unknown date'
+
+  return parsed.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  })
+}
+
+function getSavedTitle(savedQuiz) {
+  return savedQuiz.customTitle || savedQuiz.title
+}
+
 export default function App() {
   const [quiz, setQuiz] = useState(null)
   const [answers, setAnswers] = useState({})
@@ -38,6 +87,10 @@ export default function App() {
   const [printMode, setPrintMode] = useState('quiz')
   const [showBuilder, setShowBuilder] = useState(true)
   const [showSaved, setShowSaved] = useState(false)
+  const [notice, setNotice] = useState(null)
+  const [isEditingQuiz, setIsEditingQuiz] = useState(false)
+  const [savedRenameId, setSavedRenameId] = useState(null)
+  const [savedRenameValue, setSavedRenameValue] = useState('')
 
   const [licenseKey, setLicenseKey] = useState(
     localStorage.getItem('sproutsLicenseKey') || ''
@@ -73,11 +126,36 @@ export default function App() {
     }
   }, [creditsRemaining])
 
+  function syncSavedQuizzes() {
+    setSaved(getSavedQuizzes())
+  }
+
+  function showNotice(type, message) {
+    setNotice({ type, message })
+  }
+
+  function persistQuiz(quizToPersist, successMessage) {
+    const savedQuiz = saveQuiz(normalizeQuizForClient(quizToPersist))
+    setQuiz(savedQuiz)
+    syncSavedQuizzes()
+
+    if (successMessage) {
+      showNotice('success', successMessage)
+    }
+
+    return savedQuiz
+  }
+
   async function handleGenerate(formData) {
     const trimmedLicenseKey = licenseKey.trim()
 
     if (!trimmedLicenseKey) {
-      alert('Please enter and activate your license key first.')
+      showNotice('error', 'Please enter and activate your license key first.')
+      return
+    }
+
+    if (typeof creditsRemaining === 'number' && creditsRemaining <= 0) {
+      showNotice('error', 'You are out of credits. Purchase more credits to continue.')
       return
     }
 
@@ -85,6 +163,8 @@ export default function App() {
     setResults(null)
     setAnswers({})
     setPrintMode('quiz')
+    setNotice(null)
+    setIsEditingQuiz(false)
 
     try {
       const data = await generateQuiz({
@@ -92,18 +172,11 @@ export default function App() {
         licenseKey: trimmedLicenseKey
       })
 
-      const quizData = data?.quiz ?? data
+      const quizData = normalizeQuizForClient(data?.quiz ?? data)
       const returnedCredits =
         typeof data?.creditsRemaining === 'number' ? data.creditsRemaining : null
 
-      const quizToSave = {
-        ...quizData,
-        savedAt: new Date().toISOString()
-      }
-
-      setQuiz(quizData)
-      saveQuiz(quizToSave)
-      setSaved(getSavedQuizzes())
+      persistQuiz(quizData, 'New quiz generated and saved to your library.')
       setShowBuilder(false)
 
       if (typeof returnedCredits === 'number') {
@@ -116,7 +189,7 @@ export default function App() {
 
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (error) {
-      alert(error.message || 'Failed to generate quiz')
+      showNotice('error', error.message || 'Failed to generate quiz')
     } finally {
       setLoading(false)
     }
@@ -131,8 +204,10 @@ export default function App() {
 
   function handleSubmitQuiz() {
     if (!quiz?.questions) return
+
     const scored = scoreQuiz(quiz.questions, answers)
     setResults(scored)
+    showNotice('success', 'Quiz scored successfully.')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -147,12 +222,15 @@ export default function App() {
   }
 
   function handleLoadSavedQuiz(savedQuiz) {
-    setQuiz(savedQuiz)
+    setQuiz(normalizeQuizForClient(savedQuiz))
     setAnswers({})
     setResults(null)
     setPrintMode('quiz')
     setShowBuilder(false)
     setShowSaved(false)
+    setIsEditingQuiz(false)
+    setSavedRenameId(null)
+    showNotice('info', `Loaded ${getSavedTitle(savedQuiz)}.`)
 
     setTimeout(() => {
       quizTopRef.current?.scrollIntoView({
@@ -168,6 +246,8 @@ export default function App() {
     setResults(null)
     setPrintMode('quiz')
     setShowBuilder(true)
+    setIsEditingQuiz(false)
+    showNotice('info', 'Ready to build a new quiz.')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -175,7 +255,7 @@ export default function App() {
     const trimmed = licenseKey.trim()
 
     if (!trimmed) {
-      alert('Please enter a license key.')
+      showNotice('error', 'Please enter a license key.')
       return
     }
 
@@ -185,6 +265,8 @@ export default function App() {
     if (getStoredCredits() === null) {
       setCreditsRemaining(500)
     }
+
+    showNotice('success', 'License key saved on this device.')
   }
 
   function handleClearLicense() {
@@ -193,6 +275,115 @@ export default function App() {
     setCreditsRemaining(null)
     localStorage.removeItem('sproutsLicenseKey')
     localStorage.removeItem('sproutsCreditsRemaining')
+    showNotice('info', 'Saved license key cleared from this device.')
+  }
+
+  function updateQuiz(updater) {
+    setQuiz((currentQuiz) => {
+      if (!currentQuiz) {
+        return currentQuiz
+      }
+
+      return normalizeQuizForClient(updater(currentQuiz))
+    })
+    setResults(null)
+  }
+
+  function handleToggleEditing() {
+    if (!quiz) return
+
+    setIsEditingQuiz((prev) => !prev)
+    setResults(null)
+    setNotice(null)
+  }
+
+  function handleQuizTitleChange(value) {
+    updateQuiz((currentQuiz) => ({
+      ...currentQuiz,
+      title: value
+    }))
+  }
+
+  function handleQuestionUpdate(index, updates) {
+    updateQuiz((currentQuiz) => ({
+      ...currentQuiz,
+      questions: currentQuiz.questions.map((question, questionIndex) => {
+        if (questionIndex !== index) {
+          return question
+        }
+
+        const nextQuestion = {
+          ...question,
+          ...updates
+        }
+
+        const acceptedAnswers = Array.isArray(nextQuestion.acceptedAnswers)
+          ? nextQuestion.acceptedAnswers.filter(Boolean)
+          : []
+
+        return {
+          ...nextQuestion,
+          acceptedAnswers:
+            acceptedAnswers.length > 0 ? acceptedAnswers : [nextQuestion.answer].filter(Boolean),
+          choices:
+            nextQuestion.type === 'multiple_choice'
+              ? [...nextQuestion.choices, '', '', '', ''].slice(0, 4)
+              : []
+        }
+      })
+    }))
+  }
+
+  function handleSaveQuizEdits() {
+    if (!quiz) return
+
+    persistQuiz(quiz, 'Quiz edits saved.')
+    setIsEditingQuiz(false)
+  }
+
+  function handleStartRename(savedQuiz) {
+    setSavedRenameId(savedQuiz.savedId)
+    setSavedRenameValue(getSavedTitle(savedQuiz))
+  }
+
+  function handleRenameCurrentSavedQuiz() {
+    const trimmedValue = savedRenameValue.trim()
+
+    if (!savedRenameId || !trimmedValue) {
+      showNotice('error', 'Enter a new name before saving.')
+      return
+    }
+
+    const updatedQuiz = renameSavedQuiz(savedRenameId, trimmedValue)
+    syncSavedQuizzes()
+
+    if (quiz?.savedId === savedRenameId && updatedQuiz) {
+      setQuiz(normalizeQuizForClient(updatedQuiz))
+    }
+
+    setSavedRenameId(null)
+    setSavedRenameValue('')
+    showNotice('success', 'Saved quiz renamed.')
+  }
+
+  function handleDeleteCurrentSavedQuiz(savedId) {
+    if (!window.confirm('Delete this saved quiz from your library?')) {
+      return
+    }
+
+    deleteSavedQuiz(savedId)
+    syncSavedQuizzes()
+
+    if (quiz?.savedId === savedId) {
+      setQuiz((currentQuiz) => {
+        if (!currentQuiz) return currentQuiz
+
+        const { savedId: _savedId, customTitle: _customTitle, ...rest } = currentQuiz
+        return rest
+      })
+    }
+
+    showNotice('info', 'Saved quiz deleted from your library.')
   }
 
   const subjectTheme = getSubjectTheme(quiz?.subject)
@@ -208,8 +399,8 @@ export default function App() {
     }
 
     const total = quiz.questions.length
-    const answered = quiz.questions.filter((_, i) => {
-      const value = answers[i]
+    const answered = quiz.questions.filter((_, index) => {
+      const value = answers[index]
       return value !== undefined && String(value).trim() !== ''
     }).length
 
@@ -246,7 +437,7 @@ export default function App() {
           </button>
         </div>
 
-        {showLicensePopup && (
+        {showLicensePopup ? (
           <div className="license-popup-body">
             <label htmlFor="licenseKeyInput" className="license-label">
               Enter license key
@@ -256,8 +447,8 @@ export default function App() {
               id="licenseKeyInput"
               type="text"
               value={licenseKey}
-              onChange={(e) => {
-                setLicenseKey(e.target.value)
+              onChange={(event) => {
+                setLicenseKey(event.target.value)
                 setLicenseSaved(false)
               }}
               placeholder="SAQB-XXXX-XXXX-XXXX"
@@ -294,13 +485,13 @@ export default function App() {
               Need more? Refill packs add <strong>500 more credits for $5</strong>.
             </p>
 
-            {(creditsAreLow || creditsAreEmpty) && (
+            {creditsAreLow || creditsAreEmpty ? (
               <p className={`license-warning ${creditsAreEmpty ? 'license-warning-empty' : ''}`}>
                 {creditsAreEmpty
                   ? 'You are out of credits.'
                   : `You are getting low on credits (${creditsRemaining} left).`}
               </p>
-            )}
+            ) : null}
 
             <a
               href={ETSY_CREDITS_URL}
@@ -311,31 +502,49 @@ export default function App() {
               Buy More Credits
             </a>
           </div>
-        )}
+        ) : null}
       </aside>
 
       <header className="hero card">
         <h1>Sprouts Academy Quiz Builder</h1>
-        <p>Generate AI-powered quizzes for homeschool learning.</p>
+        <p>Generate AI-powered quizzes for homeschool learning and printable worksheet prep.</p>
       </header>
 
+      {notice ? (
+        <section className={`card notice-card notice-${notice.type} no-print`}>
+          <div className="notice-row">
+            <p>{notice.message}</p>
+            <button type="button" className="icon-btn notice-dismiss" onClick={() => setNotice(null)}>
+              ×
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <section className="card no-print">
-        <div
-          className="collapsible-header"
-          onClick={() => setShowBuilder(!showBuilder)}
-        >
+        <div className="collapsible-header" onClick={() => setShowBuilder((prev) => !prev)}>
           <h2>Build a Quiz</h2>
           <span>{showBuilder ? '▼' : '▶'}</span>
         </div>
 
-        {showBuilder && (
-          <QuizForm onGenerate={handleGenerate} loading={loading} />
-        )}
+        {showBuilder ? <QuizForm onGenerate={handleGenerate} loading={loading} /> : null}
       </section>
 
-      {quiz && (
+      {quiz ? (
         <section className="card" ref={quizTopRef}>
-          <h2>{quiz.title}</h2>
+          {isEditingQuiz ? (
+            <div className="quiz-edit-meta no-print">
+              <label htmlFor="quizTitleInput">Worksheet title</label>
+              <input
+                id="quizTitleInput"
+                type="text"
+                value={quiz.title}
+                onChange={(event) => handleQuizTitleChange(event.target.value)}
+              />
+            </div>
+          ) : (
+            <h2>{quiz.title}</h2>
+          )}
 
           <p className="quiz-meta">
             {quiz.subject} • Grades {quiz.gradeBand}
@@ -349,22 +558,28 @@ export default function App() {
               Print Quiz
             </button>
 
-            <button
-              type="button"
-              onClick={handlePrintAnswerKey}
-              className="secondary-btn"
-            >
+            <button type="button" onClick={handlePrintAnswerKey} className="secondary-btn">
               Print Answer Key
             </button>
+
+            <button type="button" onClick={handleToggleEditing} className="secondary-btn">
+              {isEditingQuiz ? 'Stop Editing' : 'Edit Quiz'}
+            </button>
+
+            {isEditingQuiz ? (
+              <button type="button" onClick={handleSaveQuizEdits} className="secondary-btn">
+                Save Edits
+              </button>
+            ) : null}
 
             <button type="button" onClick={handleStartOver} className="secondary-btn">
               New Quiz
             </button>
           </div>
         </section>
-      )}
+      ) : null}
 
-      {quiz && (
+      {quiz ? (
         <section className="print-header only-print print-quiz-only">
           <h1>{quiz.title}</h1>
 
@@ -373,9 +588,7 @@ export default function App() {
             <div>Date: ____________________</div>
           </div>
 
-          <div className="worksheet-score">
-            Score: ______ / ______
-          </div>
+          <div className="worksheet-score">Score: ______ / ______</div>
 
           <p>
             {quiz.subject} • Grades {quiz.gradeBand}
@@ -384,17 +597,21 @@ export default function App() {
               : ''}
           </p>
         </section>
-      )}
+      ) : null}
 
-      {quiz && (
+      {quiz ? (
         <section className="only-print print-answer-key-only print-answer-key">
-          <h1>{quiz.title} — Answer Key</h1>
+          <h1>{quiz.title} - Answer Key</h1>
 
           <p>
             {quiz.subject} • Grades {quiz.gradeBand}
             {Array.isArray(quiz.topics) && quiz.topics.length > 0
               ? ` • ${quiz.topics.join(', ')}`
               : ''}
+          </p>
+
+          <p className="answer-key-meta">
+            Generated {formatSavedDate(quiz.savedAt)} • {quiz.difficulty} difficulty • {quiz.questions.length} questions
           </p>
 
           <div className="answer-key-list">
@@ -406,6 +623,11 @@ export default function App() {
                 <p>
                   <strong>Answer:</strong> {question.answer}
                 </p>
+                {Array.isArray(question.acceptedAnswers) && question.acceptedAnswers.length > 1 ? (
+                  <p>
+                    <strong>Accepted answers:</strong> {question.acceptedAnswers.join(', ')}
+                  </p>
+                ) : null}
                 {question.explanation ? (
                   <p>
                     <strong>Explanation:</strong> {question.explanation}
@@ -415,9 +637,9 @@ export default function App() {
             ))}
           </div>
         </section>
-      )}
+      ) : null}
 
-      {quiz && !results && (
+      {quiz && !results ? (
         <section className="card stats-card no-print">
           <h2>Progress Stats</h2>
 
@@ -443,62 +665,104 @@ export default function App() {
             </div>
           </div>
         </section>
-      )}
+      ) : null}
 
-      {quiz && !results && quiz.questions.map((q, i) => (
-        <QuestionCard
-          key={q.id || i}
-          question={q}
-          index={i}
-          value={answers[i] || ''}
-          onChange={handleAnswerChange}
-        />
-      ))}
+      {quiz && !results
+        ? quiz.questions.map((question, index) => (
+            <QuestionCard
+              key={question.id || index}
+              question={question}
+              index={index}
+              value={answers[index] || ''}
+              onChange={handleAnswerChange}
+              editable={isEditingQuiz}
+              onQuestionUpdate={handleQuestionUpdate}
+            />
+          ))
+        : null}
 
-      {quiz && !results && (
+      {quiz && !results && !isEditingQuiz ? (
         <div className="no-print">
           <button type="button" className="submit-btn" onClick={handleSubmitQuiz}>
             Submit Quiz
           </button>
         </div>
-      )}
+      ) : null}
 
-      {results && <ResultsCard results={results} />}
+      {results ? <ResultsCard results={results} /> : null}
 
       <section className="card no-print">
-        <div
-          className="collapsible-header"
-          onClick={() => setShowSaved(!showSaved)}
-        >
+        <div className="collapsible-header" onClick={() => setShowSaved((prev) => !prev)}>
           <h2>Saved Quizzes</h2>
           <span>{showSaved ? '▼' : '▶'}</span>
         </div>
 
-        {showSaved &&
-          (saved.length === 0 ? (
+        {showSaved ? (
+          saved.length === 0 ? (
             <p className="muted">No saved quizzes yet.</p>
           ) : (
             <div className="saved-list">
-              {saved.map((item, index) => (
-                <div key={index} className="saved-item">
-                  <div>
-                    <h3>{item.title}</h3>
-                    <p className="muted">
-                      {item.subject} • Grades {item.gradeBand}
-                    </p>
+              {saved.map((item) => (
+                <div key={item.savedId} className="saved-item">
+                  <div className="saved-item-content">
+                    {savedRenameId === item.savedId ? (
+                      <div className="saved-rename-row">
+                        <input
+                          type="text"
+                          value={savedRenameValue}
+                          onChange={(event) => setSavedRenameValue(event.target.value)}
+                          aria-label="Rename saved quiz"
+                        />
+                        <div className="saved-rename-actions">
+                          <button type="button" className="secondary-btn" onClick={handleRenameCurrentSavedQuiz}>
+                            Save Name
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={() => {
+                              setSavedRenameId(null)
+                              setSavedRenameValue('')
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <h3>{getSavedTitle(item)}</h3>
+                        <p className="muted">
+                          {item.subject} • Grades {item.gradeBand} • {item.questionCount || item.questions?.length || 0} questions
+                        </p>
+                        <p className="muted">{item.topicSummary}</p>
+                        <p className="muted">Saved {formatSavedDate(item.savedAt)}</p>
+                      </>
+                    )}
                   </div>
 
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    onClick={() => handleLoadSavedQuiz(item)}
-                  >
-                    Load Quiz
-                  </button>
+                  <div className="saved-item-actions">
+                    <button type="button" className="secondary-btn" onClick={() => handleLoadSavedQuiz(item)}>
+                      Load Quiz
+                    </button>
+
+                    <button type="button" className="secondary-btn" onClick={() => handleStartRename(item)}>
+                      Rename
+                    </button>
+
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => handleDeleteCurrentSavedQuiz(item.savedId)}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
-          ))}
+          )
+        ) : null}
       </section>
     </div>
   )
