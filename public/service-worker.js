@@ -3,7 +3,7 @@ const APP_SHELL = [
   '/',
   '/offline.html',
   '/manifest.webmanifest',
-  '/favicon.svg',
+  '/favicon.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png'
 ]
