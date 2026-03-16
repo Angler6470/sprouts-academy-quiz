@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import sproutLogo from './assets/hero.png'
 import QuizForm from './components/QuizForm.jsx'
 import QuestionCard from './components/QuestionCard.jsx'
 import ResultsCard from './components/ResultsCard.jsx'
@@ -526,7 +527,10 @@ export default function App() {
       </aside>
 
       <header className="hero card">
-        <h1>Sprouts Academy Quiz Builder</h1>
+        <div className="hero-title-row">
+          <img src={sproutLogo} alt="Sprouts Academy logo" className="hero-logo" />
+          <h1>Sprouts Academy Quiz Builder</h1>
+        </div>
         <p>Generate AI-powered quizzes for homeschool learning and printable worksheet prep.</p>
       </header>
 
