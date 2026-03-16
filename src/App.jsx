@@ -102,6 +102,7 @@ export default function App() {
   const [showLicensePopup, setShowLicensePopup] = useState(true)
 
   const quizTopRef = useRef(null)
+  const questionRefs = useRef([])
 
   useEffect(() => {
     document.body.dataset.printMode = printMode
@@ -200,6 +201,25 @@ export default function App() {
       ...prev,
       [index]: value
     }))
+  }
+
+  function handleAnswerCommit(index, value) {
+    if (isEditingQuiz) {
+      return
+    }
+
+    if (value === undefined || String(value).trim() === '') {
+      return
+    }
+
+    const nextQuestion = questionRefs.current[index + 1]
+
+    if (nextQuestion instanceof HTMLElement) {
+      nextQuestion.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      })
+    }
   }
 
   function handleSubmitQuiz() {
@@ -530,6 +550,21 @@ export default function App() {
         {showBuilder ? <QuizForm onGenerate={handleGenerate} loading={loading} /> : null}
       </section>
 
+      {loading ? (
+        <section className="card generation-card no-print" aria-live="polite">
+          <div className="generation-card-row">
+            <div className="generation-spinner generation-spinner-lg" aria-hidden="true" />
+            <div>
+              <h2>Generating quiz</h2>
+              <p className="muted generation-copy">
+                The AI is building age-appropriate questions, checking the requested topic mix,
+                and preparing printable answer explanations.
+              </p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {quiz ? (
         <section className="card" ref={quizTopRef}>
           {isEditingQuiz ? (
@@ -669,15 +704,22 @@ export default function App() {
 
       {quiz && !results
         ? quiz.questions.map((question, index) => (
-            <QuestionCard
+            <div
               key={question.id || index}
-              question={question}
-              index={index}
-              value={answers[index] || ''}
-              onChange={handleAnswerChange}
-              editable={isEditingQuiz}
-              onQuestionUpdate={handleQuestionUpdate}
-            />
+              ref={(element) => {
+                questionRefs.current[index] = element
+              }}
+            >
+              <QuestionCard
+                question={question}
+                index={index}
+                value={answers[index] || ''}
+                onChange={handleAnswerChange}
+                onAnswerCommit={handleAnswerCommit}
+                editable={isEditingQuiz}
+                onQuestionUpdate={handleQuestionUpdate}
+              />
+            </div>
           ))
         : null}
 

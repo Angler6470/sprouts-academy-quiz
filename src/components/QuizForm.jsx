@@ -48,7 +48,7 @@ export default function QuizForm({ onGenerate, loading }) {
   const [form, setForm] = useState({
     subject: 'Math',
     gradeBand: '3-4',
-    selectedTopics: ['Multiplication'],
+    selectedTopics: ['Addition'],
     difficulty: 'easy',
     questionType: 'multiple_choice',
     count: 5,
@@ -177,6 +177,16 @@ export default function QuizForm({ onGenerate, loading }) {
       <button type="submit" disabled={loading}>
         {loading ? 'Generating...' : 'Generate Quiz'}
       </button>
+
+      {loading ? (
+        <div className="generation-status" aria-live="polite" aria-busy="true">
+          <div className="generation-spinner" aria-hidden="true" />
+          <div>
+            <strong>Generating your worksheet...</strong>
+            <p>Building age-appropriate questions, answers, and explanations now.</p>
+          </div>
+        </div>
+      ) : null}
     </form>
   )
 }

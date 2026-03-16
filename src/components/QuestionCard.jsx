@@ -9,6 +9,7 @@ export default function QuestionCard({
   index,
   value,
   onChange,
+  onAnswerCommit,
   editable = false,
   onQuestionUpdate
 }) {
@@ -121,7 +122,10 @@ export default function QuestionCard({
                 name={`question-${index}`}
                 value={choice}
                 checked={value === choice}
-                onChange={(event) => onChange(index, event.target.value)}
+                onChange={(event) => {
+                  onChange(index, event.target.value)
+                  onAnswerCommit?.(index, event.target.value)
+                }}
               />
               {choice}
             </label>
@@ -133,6 +137,12 @@ export default function QuestionCard({
             type="text"
             value={value || ''}
             onChange={(event) => onChange(index, event.target.value)}
+            onBlur={(event) => onAnswerCommit?.(index, event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                onAnswerCommit?.(index, event.currentTarget.value)
+              }
+            }}
             placeholder="Type your answer"
             className="no-print"
           />
