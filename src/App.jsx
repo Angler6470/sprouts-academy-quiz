@@ -100,7 +100,13 @@ export default function App() {
   const [licenseSaved, setLicenseSaved] = useState(
     Boolean(localStorage.getItem('sproutsLicenseKey'))
   )
-  const [showLicensePopup, setShowLicensePopup] = useState(true)
+  const [showLicensePopup, setShowLicensePopup] = useState(() => {
+    if (typeof window === 'undefined') {
+      return true
+    }
+
+    return window.innerWidth > 768
+  })
 
   const quizTopRef = useRef(null)
   const questionRefs = useRef([])
@@ -439,13 +445,21 @@ export default function App() {
   const creditsAreEmpty =
     typeof creditsRemaining === 'number' && creditsRemaining <= 0
 
+  const licenseSummary = licenseSaved && licenseKey.trim()
+    ? `Saved • ${typeof creditsRemaining === 'number' ? `${creditsRemaining} credits` : 'Credits unavailable'}`
+    : 'Tap to enter and save your key'
+
   return (
     <div className={`app ${subjectTheme}`}>
-      <aside className="license-popup no-print" aria-label="License and credits panel">
+      <aside
+        className={`license-popup no-print ${showLicensePopup ? 'is-open' : 'is-collapsed'}`}
+        aria-label="License and credits panel"
+      >
         <div className="license-popup-header">
           <div>
             <h3>License & Credits</h3>
             <p className="license-mini-text">For Etsy customers</p>
+            <p className="license-summary">{licenseSummary}</p>
           </div>
 
           <button

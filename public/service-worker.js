@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sprouts-quiz-shell-v1'
+const CACHE_NAME = 'sprouts-quiz-shell-v2'
 const APP_SHELL = [
   '/',
   '/offline.html',
@@ -28,12 +28,21 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const request = event.request
+  const requestUrl = new URL(request.url)
 
   if (request.method !== 'GET') {
     return
   }
 
-  if (new URL(request.url).pathname.startsWith('/api/')) {
+  if (!['http:', 'https:'].includes(requestUrl.protocol)) {
+    return
+  }
+
+  if (requestUrl.origin !== self.location.origin) {
+    return
+  }
+
+  if (requestUrl.pathname.startsWith('/api/')) {
     return
   }
 
@@ -51,6 +60,10 @@ self.addEventListener('fetch', (event) => {
       }
 
       return fetch(request).then((networkResponse) => {
+        if (!networkResponse.ok) {
+          return networkResponse
+        }
+
         const responseClone = networkResponse.clone()
 
         caches.open(CACHE_NAME).then((cache) => {

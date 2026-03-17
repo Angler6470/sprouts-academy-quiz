@@ -548,6 +548,13 @@ hr {
   font-size: 0.82rem;
 }
 
+.license-summary {
+  margin: 4px 0 0;
+  color: #4b5563;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .license-popup-body {
   margin-top: 12px;
 }
@@ -663,6 +670,11 @@ hr {
     box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
   }
 
+  .license-popup.is-collapsed {
+    width: min(calc(100vw - 24px), 248px);
+    padding: 10px 12px;
+  }
+
   .license-popup-header {
     align-items: center;
   }
@@ -673,6 +685,11 @@ hr {
 
   .license-mini-text {
     font-size: 0.76rem;
+  }
+
+  .license-summary {
+    max-width: 170px;
+    font-size: 0.74rem;
   }
 
   .license-button-row {
@@ -717,8 +734,18 @@ hr {
     max-width: none;
   }
 
+  .license-popup.is-collapsed {
+    width: calc(100vw - 24px);
+  }
+
   .license-popup-body {
     margin-top: 10px;
+  }
+
+  .license-popup-header .icon-btn {
+    min-width: 32px;
+    width: 32px;
+    height: 32px;
   }
 
   .license-input,
@@ -731,6 +758,12 @@ hr {
   .license-help-secondary,
   .license-warning {
     font-size: 0.8rem;
+  }
+
+  .license-status-card,
+  .license-warning,
+  .buy-credits-link {
+    border-radius: 10px;
   }
 
   .saved-item {
