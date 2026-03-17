@@ -40,8 +40,8 @@ export function buildQuizPrompt({
   const gradeGuidance = GRADE_GUIDANCE[gradeBand] || GRADE_GUIDANCE['3-4']
   const difficultyGuidance = DIFFICULTY_GUIDANCE[difficulty] || DIFFICULTY_GUIDANCE.medium
   const answerInstruction = isFillInBlank(questionType)
-    ? 'For each fill-in-the-blank question, provide 1 to 6 acceptedAnswers that include equivalent valid responses when they are truly interchangeable, such as numerals and number words.'
-    : 'For each multiple-choice question, set acceptedAnswers to an array containing only the one correct answer.'
+    ? 'For each fill-in-the-blank question, set choices to an empty array and provide 1 to 6 acceptedAnswers that include equivalent valid responses when they are truly interchangeable, such as numerals and number words.'
+    : 'For each multiple-choice question, provide exactly 4 choices and set acceptedAnswers to an array containing only the one correct answer.'
 
   return `
 Create a quiz worksheet for homeschooled children.
@@ -98,6 +98,7 @@ Return JSON in this exact shape:
       "id": "q2",
       "type": "fill_in_blank",
       "question": "string",
+      "choices": [],
       "answer": "string",
       "acceptedAnswers": ["string", "string"],
       "explanation": "string"
