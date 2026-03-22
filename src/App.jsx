@@ -4,6 +4,7 @@ import QuizForm from './components/QuizForm.jsx'
 import QuestionCard from './components/QuestionCard.jsx'
 import ResultsCard from './components/ResultsCard.jsx'
 import { generateQuiz } from './lib/api.js'
+import { exportQuizToPdf } from './lib/pdfExport.js'
 import {
   deleteSavedQuiz,
   getSavedQuizzes,
@@ -79,6 +80,8 @@ function getSavedTitle(savedQuiz) {
   return savedQuiz.customTitle || savedQuiz.title
 }
 
+const EXPORT_UNLOCK_TIMEOUT_MS = 2000
+
 export default function App() {
   const [quiz, setQuiz] = useState(null)
   const [answers, setAnswers] = useState({})
@@ -92,6 +95,7 @@ export default function App() {
   const [isEditingQuiz, setIsEditingQuiz] = useState(false)
   const [savedRenameId, setSavedRenameId] = useState(null)
   const [savedRenameValue, setSavedRenameValue] = useState('')
+  const [pdfToolsUnlocked, setPdfToolsUnlocked] = useState(false)
 
   const [licenseKey, setLicenseKey] = useState(
     localStorage.getItem('sproutsLicenseKey') || ''
@@ -110,6 +114,7 @@ export default function App() {
 
   const quizTopRef = useRef(null)
   const questionRefs = useRef([])
+  const exportUnlockRef = useRef({ awaitingP: false, timeoutId: null })
 
   useEffect(() => {
     document.body.dataset.printMode = printMode
@@ -133,6 +138,42 @@ export default function App() {
       localStorage.removeItem('sproutsCreditsRemaining')
     }
   }, [creditsRemaining])
+
+  useEffect(() => {
+    function clearExportUnlockTimer() {
+      if (exportUnlockRef.current.timeoutId) {
+        window.clearTimeout(exportUnlockRef.current.timeoutId)
+      }
+
+      exportUnlockRef.current.awaitingP = false
+      exportUnlockRef.current.timeoutId = null
+    }
+
+    function handleKeyDown(event) {
+      const key = event.key.toLowerCase()
+
+      if (event.altKey && key === 'x') {
+        clearExportUnlockTimer()
+        exportUnlockRef.current.awaitingP = true
+        exportUnlockRef.current.timeoutId = window.setTimeout(() => {
+          clearExportUnlockTimer()
+        }, EXPORT_UNLOCK_TIMEOUT_MS)
+        return
+      }
+
+      if (exportUnlockRef.current.awaitingP && event.altKey && key === 'p') {
+        clearExportUnlockTimer()
+        setPdfToolsUnlocked((prev) => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      clearExportUnlockTimer()
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
 
   function syncSavedQuizzes() {
     setSaved(getSavedQuizzes())
@@ -246,6 +287,15 @@ export default function App() {
   function handlePrintAnswerKey() {
     setPrintMode('answerKey')
     setTimeout(() => window.print(), 50)
+  }
+
+  function handleExportPdf() {
+    try {
+      exportQuizToPdf(quiz)
+      showNotice('success', 'PDF export opened in a print dialog. Choose Save as PDF to download it.')
+    } catch (error) {
+      showNotice('error', error.message || 'Failed to export PDF.')
+    }
   }
 
   function handleLoadSavedQuiz(savedQuiz) {
@@ -750,6 +800,23 @@ export default function App() {
       ) : null}
 
       {results ? <ResultsCard results={results} /> : null}
+
+      {pdfToolsUnlocked ? (
+        <aside className="pdf-export-dock no-print" aria-label="Hidden PDF export tools">
+          <div className="pdf-export-dock-inner">
+            <p className="pdf-export-label">PDF Export</p>
+            <button
+              type="button"
+              className="pdf-export-btn"
+              onClick={handleExportPdf}
+              disabled={!quiz || loading}
+            >
+              Save worksheet PDF
+            </button>
+            <p className="pdf-export-hint">Includes questions first, then answer key and explanations.</p>
+          </div>
+        </aside>
+      ) : null}
 
       <section className="card no-print">
         <div className="collapsible-header" onClick={() => setShowSaved((prev) => !prev)}>

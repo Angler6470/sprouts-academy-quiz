@@ -39,6 +39,9 @@ export function buildQuizPrompt({
   const primaryTopic = getPrimaryTopic(safeTopics)
   const gradeGuidance = GRADE_GUIDANCE[gradeBand] || GRADE_GUIDANCE['3-4']
   const difficultyGuidance = DIFFICULTY_GUIDANCE[difficulty] || DIFFICULTY_GUIDANCE.medium
+  const answerPositionRule = isFillInBlank(questionType)
+    ? ''
+    : '\n- Across the full quiz, deliberately vary the position of the correct multiple-choice option so it is assorted across first, second, third, and fourth positions. Do not keep the correct answer in the same slot repeatedly.'
   const answerInstruction = isFillInBlank(questionType)
     ? 'For each fill-in-the-blank question, set choices to an empty array and provide 1 to 6 acceptedAnswers that include equivalent valid responses when they are truly interchangeable, such as numerals and number words.'
     : 'For each multiple-choice question, provide exactly 4 choices and set acceptedAnswers to an array containing only the one correct answer.'
@@ -66,6 +69,7 @@ Rules:
 - Do not mix easier and harder levels in the same quiz.
 - Never exceed the stated grade band, even when difficulty is hard or expert.
 - For multiple choice, provide exactly 4 distinct choices and exactly 1 correct answer.
+${answerPositionRule}
 - For fill in the blank, answers should be short, clear, and easy to print.
 - ${answerInstruction}
 - ${includeExplanations ? 'Include a short explanation for each answer.' : 'Use an empty explanation string.'}
