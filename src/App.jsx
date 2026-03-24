@@ -289,10 +289,10 @@ export default function App() {
     setTimeout(() => window.print(), 50)
   }
 
-  function handleExportPdf() {
+  async function handleExportPdf() {
     try {
-      exportQuizToPdf(quiz)
-      showNotice('success', 'PDF export opened in a print dialog. Choose Save as PDF to download it.')
+      const fileName = await exportQuizToPdf(quiz)
+      showNotice('success', `Downloaded ${fileName}.`)
     } catch (error) {
       showNotice('error', error.message || 'Failed to export PDF.')
     }
