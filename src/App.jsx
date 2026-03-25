@@ -82,6 +82,82 @@ function getSavedTitle(savedQuiz) {
 
 const EXPORT_UNLOCK_TIMEOUT_MS = 2000
 
+function estimateGenerationDurationSeconds({
+  count,
+  questionType,
+  includeExplanations,
+  difficulty,
+  topics
+}) {
+  let seconds = 7 + Math.round(count * 1.2)
+
+  if (questionType === 'multiple_choice') {
+    seconds += Math.round(count * 0.2)
+  } else {
+    seconds -= 2
+  }
+
+  if (includeExplanations) {
+    seconds += Math.max(4, Math.round(count * 0.28))
+  }
+
+  if (difficulty === 'hard') {
+    seconds += 4
+  } else if (difficulty === 'expert') {
+    seconds += 8
+  }
+
+  if (Array.isArray(topics) && topics.length > 1) {
+    seconds += Math.min(6, topics.length)
+  }
+
+  return Math.max(seconds, 10)
+}
+
+function formatDuration(seconds) {
+  const normalized = Math.max(0, Math.round(seconds))
+  const minutes = Math.floor(normalized / 60)
+  const remainingSeconds = normalized % 60
+
+  if (minutes <= 0) {
+    return `${remainingSeconds}s`
+  }
+
+  if (remainingSeconds === 0) {
+    return `${minutes}m`
+  }
+
+  return `${minutes}m ${remainingSeconds}s`
+}
+
+function getGenerationStage(progressRatio) {
+  if (progressRatio < 0.2) {
+    return {
+      title: 'Planning the worksheet',
+      detail: 'Choosing a grade-appropriate mix of questions for the requested topics.'
+    }
+  }
+
+  if (progressRatio < 0.5) {
+    return {
+      title: 'Drafting questions',
+      detail: 'Writing question prompts and answer choices for the full quiz set.'
+    }
+  }
+
+  if (progressRatio < 0.82) {
+    return {
+      title: 'Checking answers',
+      detail: 'Reviewing the answer key and making sure the explanations stay consistent.'
+    }
+  }
+
+  return {
+    title: 'Finalizing the quiz',
+    detail: 'Packing the worksheet for the app. Large quiz counts can take longer near the end.'
+  }
+}
+
 export default function App() {
   const [quiz, setQuiz] = useState(null)
   const [answers, setAnswers] = useState({})
@@ -96,6 +172,8 @@ export default function App() {
   const [savedRenameId, setSavedRenameId] = useState(null)
   const [savedRenameValue, setSavedRenameValue] = useState('')
   const [pdfToolsUnlocked, setPdfToolsUnlocked] = useState(false)
+  const [generationRequest, setGenerationRequest] = useState(null)
+  const [generationNow, setGenerationNow] = useState(Date.now())
 
   const [licenseKey, setLicenseKey] = useState(
     localStorage.getItem('sproutsLicenseKey') || ''
@@ -140,6 +218,22 @@ export default function App() {
   }, [creditsRemaining])
 
   useEffect(() => {
+    if (!loading || !generationRequest) {
+      return undefined
+    }
+
+    setGenerationNow(Date.now())
+
+    const intervalId = window.setInterval(() => {
+      setGenerationNow(Date.now())
+    }, 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [loading, generationRequest])
+
+  useEffect(() => {
     function clearExportUnlockTimer() {
       if (exportUnlockRef.current.timeoutId) {
         window.clearTimeout(exportUnlockRef.current.timeoutId)
@@ -179,6 +273,31 @@ export default function App() {
     setSaved(getSavedQuizzes())
   }
 
+  const generationStatus = useMemo(() => {
+    if (!loading || !generationRequest) {
+      return null
+    }
+
+    const estimatedSeconds = estimateGenerationDurationSeconds(generationRequest)
+    const elapsedSeconds = Math.max(1, Math.floor((generationNow - generationRequest.startedAt) / 1000))
+    const progressRatio = Math.min(elapsedSeconds / estimatedSeconds, 0.96)
+    const remainingSeconds = Math.max(estimatedSeconds - elapsedSeconds, 0)
+    const stage = getGenerationStage(progressRatio)
+
+    return {
+      ...stage,
+      progressPercent: Math.max(4, Math.round(progressRatio * 100)),
+      elapsedLabel: formatDuration(elapsedSeconds),
+      remainingLabel: elapsedSeconds <= estimatedSeconds
+        ? `About ${formatDuration(remainingSeconds)} left`
+        : 'Taking longer than usual for a larger worksheet.',
+      countLabel: `${generationRequest.count} questions`,
+      questionTypeLabel: generationRequest.questionType === 'multiple_choice'
+        ? 'Multiple choice'
+        : 'Fill in the blank'
+    }
+  }, [generationNow, generationRequest, loading])
+
   function showNotice(type, message) {
     setNotice({ type, message })
   }
@@ -209,6 +328,10 @@ export default function App() {
     }
 
     setLoading(true)
+    setGenerationRequest({
+      ...formData,
+      startedAt: Date.now()
+    })
     setResults(null)
     setAnswers({})
     setPrintMode('quiz')
@@ -241,6 +364,7 @@ export default function App() {
       showNotice('error', error.message || 'Failed to generate quiz')
     } finally {
       setLoading(false)
+      setGenerationRequest(null)
     }
   }
 
@@ -615,7 +739,13 @@ export default function App() {
           <span>{showBuilder ? '▼' : '▶'}</span>
         </div>
 
-        {showBuilder ? <QuizForm onGenerate={handleGenerate} loading={loading} /> : null}
+        {showBuilder ? (
+          <QuizForm
+            onGenerate={handleGenerate}
+            loading={loading}
+            generationStatus={generationStatus}
+          />
+        ) : null}
       </section>
 
       {loading ? (
@@ -623,11 +753,24 @@ export default function App() {
           <div className="generation-card-row">
             <div className="generation-spinner generation-spinner-lg" aria-hidden="true" />
             <div>
-              <h2>Generating quiz</h2>
+              <h2>{generationStatus?.title || 'Generating quiz'}</h2>
               <p className="muted generation-copy">
-                The AI is building age-appropriate questions, checking the requested topic mix,
-                and preparing printable answer explanations.
+                {generationStatus?.detail || 'Building age-appropriate questions and preparing the answer key.'}
               </p>
+              <div className="generation-progress-block">
+                <div className="generation-progress-meta">
+                  <span>{generationStatus?.countLabel}</span>
+                  <span>{generationStatus?.questionTypeLabel}</span>
+                  <span>{generationStatus?.elapsedLabel || '0s elapsed'}</span>
+                </div>
+                <div className="generation-progress-track" aria-hidden="true">
+                  <div
+                    className="generation-progress-fill"
+                    style={{ width: `${generationStatus?.progressPercent || 6}%` }}
+                  />
+                </div>
+                <p className="generation-progress-note">{generationStatus?.remainingLabel}</p>
+              </div>
             </div>
           </div>
         </section>

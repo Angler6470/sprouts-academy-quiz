@@ -44,7 +44,7 @@ const SUBJECT_TOPICS = {
   ]
 }
 
-export default function QuizForm({ onGenerate, loading }) {
+export default function QuizForm({ onGenerate, loading, generationStatus }) {
   const [form, setForm] = useState({
     subject: 'Math',
     gradeBand: '3-4',
@@ -175,15 +175,28 @@ export default function QuizForm({ onGenerate, loading }) {
       </label>
 
       <button type="submit" disabled={loading}>
-        {loading ? 'Generating...' : 'Generate Quiz'}
+        {loading ? `Generating... ${generationStatus?.progressPercent || 0}%` : 'Generate Quiz'}
       </button>
 
       {loading ? (
         <div className="generation-status" aria-live="polite" aria-busy="true">
           <div className="generation-spinner" aria-hidden="true" />
           <div>
-            <strong>Generating your worksheet...</strong>
-            <p>Building age-appropriate questions, answers, and explanations now.</p>
+            <strong>{generationStatus?.title || 'Generating your worksheet...'}</strong>
+            <p>{generationStatus?.detail || 'Building age-appropriate questions, answers, and explanations now.'}</p>
+            <div className="generation-progress-block compact-progress-block">
+              <div className="generation-progress-meta">
+                <span>{generationStatus?.countLabel}</span>
+                <span>{generationStatus?.elapsedLabel || '0s elapsed'}</span>
+              </div>
+              <div className="generation-progress-track" aria-hidden="true">
+                <div
+                  className="generation-progress-fill"
+                  style={{ width: `${generationStatus?.progressPercent || 6}%` }}
+                />
+              </div>
+              <p className="generation-progress-note">{generationStatus?.remainingLabel}</p>
+            </div>
           </div>
         </div>
       ) : null}
